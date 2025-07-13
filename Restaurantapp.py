@@ -1,10 +1,8 @@
 import streamlit as st
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain, SequentialChain
-from langchain_openai import OpenAI
 import openai
 import os
 
+# Load API key securely from Streamlit secrets
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 st.title("🍽️ AI Restaurant Name & Menu Generator")
@@ -12,32 +10,30 @@ st.title("🍽️ AI Restaurant Name & Menu Generator")
 cuisine = st.text_input("Enter a cuisine (e.g., Indian, Italian, Arabic)")
 
 if cuisine:
-    llm = OpenAI(temperature=0.7)
+    with st.spinner("Generating..."):
+        # Step 1: Generate a restaurant name
+        name_prompt = f"I want to open a restaurant for {cuisine} food. Suggest a fancy and creative name."
+        name_response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": name_prompt}],
+            temperature=0.7,
+            max_tokens=50
+        )
+        restaurant_name = name_response['choices'][0]['message']['content'].strip()
 
-    prompt_template_name = PromptTemplate(
-        input_variables=['cuisine'],
-        template="I want to open a restaurant for {cuisine} food. Suggest a fancy name."
-    )
-    name_chain = LLMChain(llm=llm, prompt=prompt_template_name, output_key="restaurant_name")
+        # Step 2: Generate menu items
+        menu_prompt = f"Suggest a menu for a {cuisine} restaurant named '{restaurant_name}'. List 5 items with short names."
+        menu_response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": menu_prompt}],
+            temperature=0.7,
+            max_tokens=100
+        )
+        menu_items = menu_response['choices'][0]['message']['content'].strip()
 
-    prompt_template_items = PromptTemplate(
-        input_variables=['restaurant_name'],
-        template="Suggest some menu items for {restaurant_name}. Return it as a comma-separated list."
-    )
-    food_items_chain = LLMChain(llm=llm, prompt=prompt_template_items, output_key="menu_items")
+        # Display results
+        st.subheader("🍴 Restaurant Name:")
+        st.write(restaurant_name)
 
-    sequential_chain = SequentialChain(
-        chains=[name_chain, food_items_chain],
-        input_variables=['cuisine'],
-        output_variables=['restaurant_name', 'menu_items'],
-        verbose=False
-    )
-
-    response = sequential_chain({'cuisine': cuisine})
-
-    st.subheader("🍴 Restaurant Name:")
-    st.write(response['restaurant_name'])
-
-    st.subheader("🥘 Menu Items:")
-    for item in response['menu_items'].split(","):
-        st.write("- " + item.strip())
+        st.subheader("🥘 Menu Items:")
+        st.write(menu_items)
